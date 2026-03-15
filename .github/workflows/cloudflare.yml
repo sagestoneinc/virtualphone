@@ -1,0 +1,97 @@
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions: {}
+    environment:
+      name: cloudflare
+      url: ${{ vars.DEPLOY_URL }}
+
+    steps:
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          envs: GHCR_TOKEN,REPO,ACTOR,TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN,TWILIO_FROM_NUMBER,TWILIO_TO_NUMBER,TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID
+          script: |
+            # Authenticate to GHCR using --password-stdin (credentials are not visible in process listings)
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+
+            docker pull "ghcr.io/$REPO:latest"
+
+            # Write credentials to a restricted env file so they are not visible in process listings
+            ENV_FILE=$(mktemp)
+            chmod 600 "$ENV_FILE"
+            printf 'Twilio__AccountSid=%s\nTwilio__AuthToken=%s\nTwilio__FromNumber=%s\nTwilio__ToNumber=%s\nTelegram__BotToken=%s\nTelegram__ChatId=%s\n' \
+              "$TWILIO_ACCOUNT_SID" "$TWILIO_AUTH_TOKEN" "$TWILIO_FROM_NUMBER" "$TWILIO_TO_NUMBER" \
+              "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" > "$ENV_FILE"
+
+            docker stop virtualphone-api || true
+            docker rm virtualphone-api || true
+            docker run -d \
+              --name virtualphone-api \
+              --restart unless-stopped \
+              -p 127.0.0.1:8080:8080 \
+              --env-file "$ENV_FILE" \
+              "ghcr.io/$REPO:latest"
+
+            rm -f "$ENV_FILE"
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          TWILIO_TO_NUMBER: ${{ secrets.TWILIO_TO_NUMBER }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

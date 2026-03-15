@@ -82,12 +82,13 @@ dotnet build VirtualPhone/VirtualPhone.csproj
 
 ## GitHub Actions & GitHub Pages
 
-Two workflows are included in `.github/workflows/`:
+Three workflows are included in `.github/workflows/`:
 
 | File | Purpose |
 |---|---|
 | `ci.yml` | Builds the project automatically on every push and pull request to `main` |
 | `pages.yml` | Deploys the static documentation site in `docs/` to **GitHub Pages** on every push to `main` |
+| `cloudflare.yml` | Builds a Docker image, pushes it to GitHub Container Registry, and deploys the API to a server via SSH, exposed through **Cloudflare Tunnel** |
 
 ### Enabling GitHub Pages
 
@@ -103,13 +104,48 @@ The live documentation will be available at:
 https://<your-github-username>.github.io/virtualphone/
 ```
 
-### Hosting the API
+### Deploying the API to Cloudflare
 
-Because the API is a server-side process, you need a compute host. Recommended options:
+The `cloudflare.yml` workflow containerises the API with Docker, pushes the image to the **GitHub Container Registry** (`ghcr.io`), and then SSH-deploys it to a server that exposes it through a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/).
 
-- **Azure App Service** – first-class .NET support, free tier available
-- **Railway / Fly.io / Render** – simple container-based deployments
-- **Docker on any VPS** – `dotnet publish` and run the resulting image
+#### Server prerequisites
+
+1. Install Docker on your server.
+2. Install and configure `cloudflared`:
+   ```bash
+   # Authenticate and create a tunnel
+   cloudflared tunnel login
+   cloudflared tunnel create virtualphone
+   # Route your domain to the tunnel
+   cloudflared tunnel route dns virtualphone <your-domain>
+   # Run the tunnel (points to the container port)
+   cloudflared tunnel --url http://localhost:8080 run virtualphone
+   ```
+
+#### GitHub repository secrets
+
+Add the following secrets in **Settings → Secrets and variables → Actions**:
+
+| Secret | Description |
+|---|---|
+| `SSH_HOST` | Hostname or IP address of your deployment server |
+| `SSH_USER` | SSH username on the deployment server |
+| `SSH_KEY` | Private SSH key that can authenticate to the server |
+| `GHCR_TOKEN` | GitHub Personal Access Token (classic) with `read:packages` scope, used by the server to pull the image from GHCR |
+| `TWILIO_ACCOUNT_SID` | Your Twilio Account SID |
+| `TWILIO_AUTH_TOKEN` | Your Twilio Auth Token |
+| `TWILIO_FROM_NUMBER` | Your Twilio phone number in E.164 format |
+| `TWILIO_TO_NUMBER` | The phone number SMS replies are forwarded to |
+| `TELEGRAM_BOT_TOKEN` | Bot token provided by @BotFather |
+| `TELEGRAM_CHAT_ID` | Numeric ID of the Telegram chat |
+
+Optionally, set the `DEPLOY_URL` **variable** (not secret) to the public URL of your deployment so the workflow environment shows a clickable link.
+
+#### How it works
+
+1. On every push to `main` (or via manual trigger), the workflow builds a Docker image from the `Dockerfile` at the repository root and pushes it to `ghcr.io/<owner>/virtualphone:latest`.
+2. The `deploy` job SSHes into your server and runs `docker pull` followed by `docker run` to start the latest image on port `8080`.
+3. Cloudflare Tunnel (running on the server) forwards external HTTPS traffic to `localhost:8080`, so your webhooks are always reachable at your configured domain without opening any firewall ports.
 
 ## Project structure
 
