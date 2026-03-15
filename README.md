@@ -80,6 +80,37 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
 dotnet build VirtualPhone/VirtualPhone.csproj
 ```
 
+## GitHub Actions & GitHub Pages
+
+Two workflows are included in `.github/workflows/`:
+
+| File | Purpose |
+|---|---|
+| `ci.yml` | Builds the project automatically on every push and pull request to `main` |
+| `pages.yml` | Deploys the static documentation site in `docs/` to **GitHub Pages** on every push to `main` |
+
+### Enabling GitHub Pages
+
+> **Note:** GitHub Pages only serves *static* files, so it cannot run the ASP.NET Core API itself.
+> The Pages deployment publishes the documentation site at `docs/index.html`.
+
+1. Go to your repository on GitHub → **Settings** → **Pages**.
+2. Under **Build and deployment**, select **Source: GitHub Actions**.
+3. Push (or re-push) to `main` – the `pages.yml` workflow will deploy the docs automatically.
+
+The live documentation will be available at:
+```
+https://<your-github-username>.github.io/virtualphone/
+```
+
+### Hosting the API
+
+Because the API is a server-side process, you need a compute host. Recommended options:
+
+- **Azure App Service** – first-class .NET support, free tier available
+- **Railway / Fly.io / Render** – simple container-based deployments
+- **Docker on any VPS** – `dotnet publish` and run the resulting image
+
 ## Project structure
 
 ```
