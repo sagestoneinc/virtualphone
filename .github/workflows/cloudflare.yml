@@ -17,7 +17,7 @@ jobs:
       packages: write
 
     outputs:
-      image-tag: ${{ steps.sha-tag.outputs.tag }}
+      image-tag: ${{ steps.meta.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -45,10 +45,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Set SHA image tag
-        id: sha-tag
-        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
   deploy:
     runs-on: ubuntu-latest
