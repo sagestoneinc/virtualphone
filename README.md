@@ -131,7 +131,7 @@ Add the following secrets in **Settings → Secrets and variables → Actions**:
 | `SSH_HOST` | Hostname or IP address of your deployment server |
 | `SSH_USER` | SSH username on the deployment server |
 | `SSH_KEY` | Private SSH key that can authenticate to the server |
-| `GHCR_TOKEN` | GitHub Personal Access Token (classic) with `read:packages` scope, used by the server to pull the image from GHCR |
+| `GHCR_TOKEN` | GitHub Personal Access Token (classic) with `read:packages` scope (also add `repo` scope if the repository is private), used by the server to pull the image from GHCR |
 | `TWILIO_ACCOUNT_SID` | Your Twilio Account SID |
 | `TWILIO_AUTH_TOKEN` | Your Twilio Auth Token |
 | `TWILIO_FROM_NUMBER` | Your Twilio phone number in E.164 format |
